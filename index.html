@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PayNudge</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap');
+
+  :root {
+    --paper: #F6F3EC;
+    --paper-raised: #FFFFFF;
+    --ink: #1B2A22;
+    --ink-soft: #5C7A6A;
+    --brass: #8A6D3B;
+    --switch: #B0472F;
+    --keep: #4C6B4F;
+    --rule: #DCD5C4;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'Inter', sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .app { max-width: 640px; margin: 0 auto; min-height: 100vh; padding: 32px 20px 60px; }
+  h1 { font-family: 'Fraunces', serif; font-weight: 600; font-size: 28px; margin: 0 0 6px; }
+  .tagline { color: var(--ink-soft); font-size: 15px; margin: 0 0 28px; }
+  .card { background: var(--paper-raised); border: 1px solid var(--rule); border-radius: 4px; padding: 22px; margin-bottom: 20px; }
+  label { display: block; font-size: 13px; color: var(--ink-soft); margin-bottom: 4px; }
+  input, select {
+    width: 100%; padding: 12px; border: 1px solid var(--rule); border-radius: 4px;
+    font-family: 'Inter', sans-serif; font-size: 14px; background: var(--paper); color: var(--ink);
+    margin-bottom: 14px;
+  }
+  button {
+    font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 600;
+    padding: 12px 18px; border-radius: 4px; border: none; cursor: pointer;
+  }
+  .btn-primary { background: var(--ink); color: var(--paper); width: 100%; }
+  .btn-small { background: var(--ink); color: var(--paper); padding: 8px 12px; font-size: 13px; }
+  .btn-ghost { background: transparent; color: var(--ink-soft); border: 1px solid var(--rule); padding: 8px 12px; font-size: 13px; }
+  .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+  .tab { flex: 1; text-align: center; padding: 10px; border-radius: 4px; cursor: pointer; font-size: 14px; color: var(--ink-soft); border: 1px solid var(--rule); }
+  .tab.active { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+  .hidden { display: none !important; }
+  .error { color: var(--switch); font-size: 13px; margin-bottom: 10px; }
+  .section-title { font-family: 'Fraunces', serif; font-size: 18px; margin: 0 0 14px; }
+  .row { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+  .invoice-item { border-top: 1px dashed var(--rule); padding: 14px 0; }
+  .invoice-item:first-child { border-top: none; }
+  .invoice-top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px; }
+  .invoice-client { font-weight: 600; }
+  .invoice-amount { font-family: 'JetBrains Mono', monospace; }
+  .invoice-meta { font-size: 12px; color: var(--ink-soft); margin-bottom: 8px; }
+  .badge { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 20px; }
+  .badge-unpaid { background: #F6E6E1; color: var(--switch); }
+  .badge-paid { background: #E5EBE3; color: var(--keep); }
+  .top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+  .empty { color: var(--ink-soft); font-size: 14px; text-align: center; padding: 20px 0; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- AUTH SCREEN -->
+  <div id="auth-screen">
+    <h1>PayNudge</h1>
+    <p class="tagline">Add your clients and invoices. We chase the late ones for you, automatically.</p>
+    <div class="card">
+      <div class="tabs">
+        <div class="tab active" id="tab-login">Log in</div>
+        <div class="tab" id="tab-signup">Sign up</div>
+      </div>
+      <div id="auth-error" class="error hidden"></div>
+      <label>Email</label>
+      <input type="email" id="auth-email" placeholder="you@example.com">
+      <label>Password</label>
+      <input type="password" id="auth-password" placeholder="At least 6 characters">
+      <button class="btn-primary" id="auth-submit">Log in</button>
+    </div>
+  </div>
+
+  <!-- DASHBOARD -->
+  <div id="dashboard-screen" class="hidden">
+    <div class="top-bar">
+      <div>
+        <h1 style="margin-bottom:0;">PayNudge</h1>
+      </div>
+      <button class="btn-ghost" id="logout-btn">Log out</button>
+    </div>
+
+    <div class="card">
+      <div class="section-title">Add a client</div>
+      <div id="client-error" class="error hidden"></div>
+      <label>Name</label>
+      <input type="text" id="client-name" placeholder="Client name">
+      <label>Email</label>
+      <input type="email" id="client-email" placeholder="client@example.com">
+      <button class="btn-small" id="add-client-btn">Add client</button>
+    </div>
+
+    <div class="card">
+      <div class="section-title">Add an invoice</div>
+      <div id="invoice-error" class="error hidden"></div>
+      <label>Client</label>
+      <select id="invoice-client"></select>
+      <label>Description</label>
+      <input type="text" id="invoice-desc" placeholder="e.g. Website redesign — final payment">
+      <label>Amount ($)</label>
+      <input type="number" id="invoice-amount" placeholder="500" min="0" step="0.01">
+      <label>Due date</label>
+      <input type="date" id="invoice-due">
+      <button class="btn-small" id="add-invoice-btn">Add invoice</button>
+    </div>
+
+    <div class="card">
+      <div class="section-title">Outstanding invoices</div>
+      <div id="invoice-list"></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  const SUPABASE_URL = "https://ecsnkjpaubpwxejxhyjn.supabase.co";
+  const SUPABASE_ANON_KEY = "sb_publishable_8MA__tLueJAihV-M2lMOiQ_BiUgHRAc";
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  let currentUser = null;
+  let clients = [];
+
+  // ---- Auth screen tab switching ----
+  const tabLogin = document.getElementById('tab-login');
+  const tabSignup = document.getElementById('tab-signup');
+  const authSubmit = document.getElementById('auth-submit');
+  let authMode = 'login';
+
+  tabLogin.addEventListener('click', () => {
+    authMode = 'login';
+    tabLogin.classList.add('active');
+    tabSignup.classList.remove('active');
+    authSubmit.textContent = 'Log in';
+  });
+  tabSignup.addEventListener('click', () => {
+    authMode = 'signup';
+    tabSignup.classList.add('active');
+    tabLogin.classList.remove('active');
+    authSubmit.textContent = 'Sign up';
+  });
+
+  authSubmit.addEventListener('click', async () => {
+    const email = document.getElementById('auth-email').value.trim();
+    const password = document.getElementById('auth-password').value;
+    const errEl = document.getElementById('auth-error');
+    errEl.classList.add('hidden');
+
+    if (!email || !password) {
+      errEl.textContent = 'Enter both email and password.';
+      errEl.classList.remove('hidden');
+      return;
+    }
+
+    let result;
+    if (authMode === 'signup') {
+      result = await sb.auth.signUp({ email, password });
+    } else {
+      result = await sb.auth.signInWithPassword({ email, password });
+    }
+
+    if (result.error) {
+      errEl.textContent = result.error.message;
+      errEl.classList.remove('hidden');
+      return;
+    }
+
+    if (authMode === 'signup' && !result.data.session) {
+      errEl.textContent = 'Check your email to confirm your account, then log in.';
+      errEl.classList.remove('hidden');
+      return;
+    }
+
+    await afterLogin();
+  });
+
+  document.getElementById('logout-btn').addEventListener('click', async () => {
+    await sb.auth.signOut();
+    location.reload();
+  });
+
+  // ---- After login ----
+  async function afterLogin() {
+    const { data: { user } } = await sb.auth.getUser();
+    currentUser = user;
+    document.getElementById('auth-screen').classList.add('hidden');
+    document.getElementById('dashboard-screen').classList.remove('hidden');
+    await loadClients();
+    await loadInvoices();
+  }
+
+  // ---- Clients ----
+  async function loadClients() {
+    const { data, error } = await sb.from('clients').select('*').order('name');
+    if (error) return;
+    clients = data;
+    const select = document.getElementById('invoice-client');
+    select.innerHTML = clients.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+  }
+
+  document.getElementById('add-client-btn').addEventListener('click', async () => {
+    const name = document.getElementById('client-name').value.trim();
+    const email = document.getElementById('client-email').value.trim();
+    const errEl = document.getElementById('client-error');
+    errEl.classList.add('hidden');
+
+    if (!name || !email) {
+      errEl.textContent = 'Enter both name and email.';
+      errEl.classList.remove('hidden');
+      return;
+    }
+
+    const { error } = await sb.from('clients').insert({ user_id: currentUser.id, name, email });
+    if (error) {
+      errEl.textContent = error.message;
+      errEl.classList.remove('hidden');
+      return;
+    }
+    document.getElementById('client-name').value = '';
+    document.getElementById('client-email').value = '';
+    await loadClients();
+  });
+
+  // ---- Invoices ----
+  document.getElementById('add-invoice-btn').addEventListener('click', async () => {
+    const client_id = document.getElementById('invoice-client').value;
+    const description = document.getElementById('invoice-desc').value.trim();
+    const amount = parseFloat(document.getElementById('invoice-amount').value);
+    const due_date = document.getElementById('invoice-due').value;
+    const errEl = document.getElementById('invoice-error');
+    errEl.classList.add('hidden');
+
+    if (!client_id) {
+      errEl.textContent = 'Add a client first.';
+      errEl.classList.remove('hidden');
+      return;
+    }
+    if (!amount || !due_date) {
+      errEl.textContent = 'Enter an amount and due date.';
+      errEl.classList.remove('hidden');
+      return;
+    }
+
+    const { error } = await sb.from('invoices').insert({
+      user_id: currentUser.id, client_id, description, amount, due_date,
+    });
+    if (error) {
+      errEl.textContent = error.message;
+      errEl.classList.remove('hidden');
+      return;
+    }
+    document.getElementById('invoice-desc').value = '';
+    document.getElementById('invoice-amount').value = '';
+    document.getElementById('invoice-due').value = '';
+    await loadInvoices();
+  });
+
+  async function loadInvoices() {
+    const { data, error } = await sb
+      .from('invoices')
+      .select('*, clients(name)')
+      .order('due_date');
+    const container = document.getElementById('invoice-list');
+    if (error || !data || data.length === 0) {
+      container.innerHTML = '<div class="empty">No invoices yet.</div>';
+      return;
+    }
+
+    const stageLabels = ['No reminder sent yet', 'Friendly reminder sent', 'Firm follow-up sent', 'Final notice sent'];
+
+    container.innerHTML = data.map(inv => {
+      const dueDate = new Date(inv.due_date);
+      const today = new Date();
+      const daysDiff = Math.round((dueDate - today) / (1000 * 60 * 60 * 24));
+      let dueText = daysDiff >= 0 ? `Due in ${daysDiff} day${daysDiff === 1 ? '' : 's'}` : `${Math.abs(daysDiff)} day${Math.abs(daysDiff) === 1 ? '' : 's'} overdue`;
+
+      return `
+        <div class="invoice-item">
+          <div class="invoice-top">
+            <span class="invoice-client">${inv.clients?.name || 'Unknown client'}</span>
+            <span class="invoice-amount">$${Number(inv.amount).toFixed(2)}</span>
+          </div>
+          <div class="invoice-meta">${inv.description || ''} · ${dueText} · ${stageLabels[inv.reminder_stage]}</div>
+          <div class="row">
+            <span class="badge ${inv.status === 'paid' ? 'badge-paid' : 'badge-unpaid'}">${inv.status.toUpperCase()}</span>
+            ${inv.status === 'unpaid' ? `<button class="btn-ghost" data-id="${inv.id}" onclick="markPaid('${inv.id}')">Mark paid</button>` : ''}
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  window.markPaid = async function (id) {
+    await sb.from('invoices').update({ status: 'paid' }).eq('id', id);
+    await loadInvoices();
+  };
+
+  // ---- On load: check if already logged in ----
+  (async () => {
+    const { data: { session } } = await sb.auth.getSession();
+    if (session) await afterLogin();
+  })();
+</script>
+</body>
+</html>
